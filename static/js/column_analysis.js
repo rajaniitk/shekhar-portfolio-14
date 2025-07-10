@@ -22,6 +22,14 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize
     loadDatasets();
     setupEventListeners();
+    
+    // Utility function to safely format numbers
+    function safeFormat(value, decimals = 3) {
+        if (value === null || value === undefined || isNaN(value)) {
+            return 'N/A';
+        }
+        return typeof value === 'number' ? value.toFixed(decimals) : value;
+    }
 
     function setupEventListeners() {
         refreshButton.addEventListener('click', loadDatasets);
@@ -235,7 +243,7 @@ document.addEventListener('DOMContentLoaded', function() {
         // Assuming basic_statistics contains these values
         const basicStats = columnInfo.basic_statistics || {};
         document.getElementById('non-null-count').textContent = basicStats.non_null_count ? basicStats.non_null_count.toLocaleString() : '-';
-        const missingPercentage = basicStats.null_percentage !== undefined ? basicStats.null_percentage.toFixed(1) : '-';
+        const missingPercentage = safeFormat(basicStats.null_percentage, 1) !== 'N/A' ? safeFormat(basicStats.null_percentage, 1) : '-';
         document.getElementById('missing-values').textContent = `${basicStats.null_count ? basicStats.null_count.toLocaleString() : '-'} (${missingPercentage}%)`;
         document.getElementById('unique-values').textContent = basicStats.unique_count ? basicStats.unique_count.toLocaleString() : '-';
         document.getElementById('memory-usage').textContent = basicStats.memory_usage ? formatBytes(basicStats.memory_usage) : '-';
@@ -251,44 +259,44 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         let html = '';
-        if (currentColumn && currentColumn.type.toLowerCase().includes('int') || currentColumn.type.toLowerCase().includes('float')) { // Numeric
+        if (currentColumn && currentColumn.type && (currentColumn.type.toLowerCase().includes('int') || currentColumn.type.toLowerCase().includes('float'))) { // Numeric
             html += '<div class="stats-grid">';
             html += `
                 <div class="stat-item">
                     <strong>MEAN</strong>
-                    <span>${stats.mean !== undefined ? stats.mean.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.mean)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>MEDIAN</strong>
-                    <span>${stats.median !== undefined ? stats.median.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.median)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>STD DEV</strong>
-                    <span>${stats.std !== undefined ? stats.std.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.std)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>MIN</strong>
-                    <span>${stats.min !== undefined ? stats.min.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.min)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>MAX</strong>
-                    <span>${stats.max !== undefined ? stats.max.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.max)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>IQR</strong>
-                    <span>${stats.iqr !== undefined ? stats.iqr.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.iqr)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>SKEWNESS</strong>
-                    <span>${stats.skewness !== undefined ? stats.skewness.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.skewness)}</span>
                 </div>
                 <div class="stat-item">
                     <strong>KURTOSIS</strong>
-                    <span>${stats.kurtosis !== undefined ? stats.kurtosis.toFixed(3) : 'N/A'}</span>
+                    <span>${safeFormat(stats.kurtosis)}</span>
                 </div>
             `;
             html += '</div>';
-        } else if (currentColumn && (currentColumn.type === 'object' || currentColumn.type.toLowerCase().includes('category'))) { // Categorical
+        } else if (currentColumn && currentColumn.type && (currentColumn.type === 'object' || currentColumn.type.toLowerCase().includes('category'))) { // Categorical
             html += '<div class="category-stats">';
             html += `
                 <div class="stat-item">
@@ -345,10 +353,10 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Example: Displaying some key distribution info if available
         let html = '<div class="chart-placeholder">';
-        if (dataType.toLowerCase().includes('int') || dataType.toLowerCase().includes('float')) {
-            html += `<p><strong>Mean:</strong> ${distributionData.mean?.toFixed(3) ?? 'N/A'}</p>`;
-            html += `<p><strong>Median:</strong> ${distributionData.median?.toFixed(3) ?? 'N/A'}</p>`;
-            html += `<p><strong>Skewness:</strong> ${distributionData.skewness?.toFixed(3) ?? 'N/A'}</p>`;
+        if (dataType && (dataType.toLowerCase().includes('int') || dataType.toLowerCase().includes('float'))) {
+            html += `<p><strong>Mean:</strong> ${safeFormat(distributionData.mean)}</p>`;
+            html += `<p><strong>Median:</strong> ${safeFormat(distributionData.median)}</p>`;
+            html += `<p><strong>Skewness:</strong> ${safeFormat(distributionData.skewness)}</p>`;
         } else { // Categorical
             html += `<p><strong>Unique Values:</strong> ${distributionData.unique_values ?? 'N/A'}</p>`;
             html += `<p><strong>Most Frequent:</strong> ${distributionData.most_frequent || 'N/A'}</p>`;
@@ -428,12 +436,14 @@ document.addEventListener('DOMContentLoaded', function() {
             if (data.success && data.outliers) {
                 const outlierData = data.outliers.outlier_detection?.iqr_method; // Assuming IQR method is primary
                 if (outlierData) {
-                    const percentage = outlierData.percentage.toFixed(1);
+                    const percentage = safeFormat(outlierData.percentage, 1);
+                    const lowerBound = safeFormat(outlierData.lower_bound, 2);
+                    const upperBound = safeFormat(outlierData.upper_bound, 2);
                     const container = document.getElementById('outlier-detection');
                     container.innerHTML = `
                         <div class="outlier-result">
-                            <p>${outlierData.count} potential outliers detected (${percentage}% of data)</p>
-                            <p>Using IQR method (bounds: ${outlierData.lower_bound.toFixed(2)} - ${outlierData.upper_bound.toFixed(2)})</p>
+                            <p>${outlierData.count || 0} potential outliers detected (${percentage}% of data)</p>
+                            <p>Using IQR method (bounds: ${lowerBound} - ${upperBound})</p>
                             <p>Consider investigating and handling these values.</p>
                         </div>
                     `;
@@ -446,7 +456,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     async function fetchTrendInfo() {
-        if (!currentDatasetId || !currentColumn || !(currentColumn.type.toLowerCase().includes('date') || currentColumn.type.toLowerCase().includes('time'))) {
+        if (!currentDatasetId || !currentColumn || !currentColumn.type || !(currentColumn.type.toLowerCase().includes('date') || currentColumn.type.toLowerCase().includes('time'))) {
              // Only fetch if column is temporal
             document.getElementById('trends-analysis').innerHTML = '<p>No temporal analysis for this column type.</p>';
             return;
@@ -559,10 +569,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         html += `
                             <div class="relationship-stats">
                                 <div class="stat-item">
-                                    <strong>Correlation (${corr?.method || 'Pearson'}):</strong> ${corr?.correlation.toFixed(4) ?? 'N/A'}
+                                    <strong>Correlation (${corr?.method || 'Pearson'}):</strong> ${safeFormat(corr?.correlation, 4)}
                                 </div>
                                 <div class="stat-item">
-                                    <strong>P-value:</strong> ${pValue !== undefined ? pValue.toFixed(4) : 'N/A'}
+                                    <strong>P-value:</strong> ${safeFormat(pValue, 4)}
                                 </div>
                                 <div class="stat-item">
                                     <strong>Significance:</strong> ${pValue !== undefined ? (pValue < 0.05 ? 'Significant' : 'Not Significant') : 'N/A'}

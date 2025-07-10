@@ -600,33 +600,44 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayColumnComparison(comparison) {
         const container = document.getElementById('comparison-results');
         
+        // Safely handle undefined comparison data
+        if (!comparison || !comparison.column1 || !comparison.column2) {
+            container.innerHTML = `
+                <div class="column-comparison-results error">
+                    <h3>Column Comparison Error</h3>
+                    <p>Unable to display comparison results. Please ensure both columns are properly selected and contain valid data.</p>
+                </div>
+            `;
+            return;
+        }
+        
         const html = `
             <div class="column-comparison-results">
                 <h3>Column Comparison Results</h3>
-                <p>Comparing ${comparison.column1.column} vs ${comparison.column2.column}</p>
+                <p>Comparing ${comparison.column1.column || 'Unknown'} vs ${comparison.column2.column || 'Unknown'}</p>
                 
                 <div class="column-stats-grid">
                     <div class="column-stats-card">
-                        <h4>${comparison.column1.dataset} - ${comparison.column1.column}</h4>
+                        <h4>${comparison.column1.dataset || 'Unknown Dataset'} - ${comparison.column1.column || 'Unknown Column'}</h4>
                         <div class="stats-list">
-                            ${Object.entries(comparison.column1.stats).map(([stat, value]) => `
+                            ${comparison.column1.stats ? Object.entries(comparison.column1.stats).map(([stat, value]) => `
                                 <div class="stat-row">
                                     <span class="stat-name">${stat.toUpperCase()}:</span>
-                                    <span class="stat-value">${value}</span>
+                                    <span class="stat-value">${value !== null && value !== undefined ? value : 'N/A'}</span>
                                 </div>
-                            `).join('')}
+                            `).join('') : '<p>No statistics available</p>'}
                         </div>
                     </div>
                     
                     <div class="column-stats-card">
-                        <h4>${comparison.column2.dataset} - ${comparison.column2.column}</h4>
+                        <h4>${comparison.column2.dataset || 'Unknown Dataset'} - ${comparison.column2.column || 'Unknown Column'}</h4>
                         <div class="stats-list">
-                            ${Object.entries(comparison.column2.stats).map(([stat, value]) => `
+                            ${comparison.column2.stats ? Object.entries(comparison.column2.stats).map(([stat, value]) => `
                                 <div class="stat-row">
                                     <span class="stat-name">${stat.toUpperCase()}:</span>
-                                    <span class="stat-value">${value}</span>
+                                    <span class="stat-value">${value !== null && value !== undefined ? value : 'N/A'}</span>
                                 </div>
-                            `).join('')}
+                            `).join('') : '<p>No statistics available</p>'}
                         </div>
                     </div>
                 </div>
@@ -636,15 +647,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="test-results">
                         <div class="test-result">
                             <span class="test-name">Correlation:</span>
-                            <span class="test-value">${comparison.tests.correlation}</span>
+                            <span class="test-value">${comparison.tests && comparison.tests.correlation !== undefined ? comparison.tests.correlation : 'N/A'}</span>
                         </div>
                         <div class="test-result">
                             <span class="test-name">T-test p-value:</span>
-                            <span class="test-value">${comparison.tests.t_test_p_value}</span>
+                            <span class="test-value">${comparison.tests && comparison.tests.t_test_p_value !== undefined ? comparison.tests.t_test_p_value : 'N/A'}</span>
                         </div>
                         <div class="test-result">
                             <span class="test-name">Kolmogorov-Smirnov p-value:</span>
-                            <span class="test-value">${comparison.tests.ks_test_p_value}</span>
+                            <span class="test-value">${comparison.tests && comparison.tests.ks_test_p_value !== undefined ? comparison.tests.ks_test_p_value : 'N/A'}</span>
                         </div>
                     </div>
                 </div>
