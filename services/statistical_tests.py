@@ -20,6 +20,52 @@ class StatisticalTests:
     def __init__(self):
         self.data_processor = DataProcessor()
     
+    def get_descriptive_statistics_by_id(self, dataset_id, columns=None):
+        """Get descriptive statistics for specified columns using dataset ID"""
+        try:
+            dataset = Dataset.query.get_or_404(dataset_id)
+            df = self.data_processor.load_dataset(dataset)
+            
+            if columns:
+                # Filter to requested columns
+                available_cols = [col for col in columns if col in df.columns]
+                if not available_cols:
+                    return {'success': False, 'error': 'None of the requested columns found'}
+                df = df[available_cols]
+            
+            # Get basic statistics
+            numeric_cols = df.select_dtypes(include=[np.number]).columns
+            categorical_cols = df.select_dtypes(include=['object']).columns
+            
+            results = {}
+            
+            if len(numeric_cols) > 0:
+                numeric_stats = df[numeric_cols].describe().to_dict()
+                # Convert numpy types to regular Python types for JSON serialization
+                for col in numeric_stats:
+                    for stat in numeric_stats[col]:
+                        if pd.isna(numeric_stats[col][stat]):
+                            numeric_stats[col][stat] = None
+                        else:
+                            numeric_stats[col][stat] = float(numeric_stats[col][stat])
+                results['numeric'] = numeric_stats
+                
+            if len(categorical_cols) > 0:
+                results['categorical'] = {}
+                for col in categorical_cols:
+                    results['categorical'][col] = {
+                        'count': int(df[col].count()),
+                        'unique': int(df[col].nunique()),
+                        'top': df[col].mode().iloc[0] if not df[col].mode().empty else None,
+                        'freq': int(df[col].value_counts().iloc[0]) if not df[col].value_counts().empty else 0
+                    }
+            
+            return {'success': True, 'statistics': results}
+            
+        except Exception as e:
+            current_app.logger.error(f"Descriptive statistics error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
     def get_descriptive_statistics(self, file_path, columns=None):
         """Get descriptive statistics for specified columns"""
         try:

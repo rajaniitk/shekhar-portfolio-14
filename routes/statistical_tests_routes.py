@@ -49,15 +49,16 @@ def descriptive_statistics():
         if not dataset_id or not columns:
             return jsonify({'success': False, 'error': 'Dataset ID and columns are required'}), 400
         
-        dataset = Dataset.query.get_or_404(dataset_id)
         service = StatisticalTests()
+        result = service.get_descriptive_statistics_by_id(dataset_id, columns)
         
-        stats = service.get_descriptive_statistics(dataset.file_path, columns)
-        
-        return jsonify({
-            'success': True,
-            'statistics': stats
-        })
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'statistics': result['statistics']
+            })
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 400
         
     except Exception as e:
         logging.error(f"Descriptive statistics error: {str(e)}")
@@ -74,15 +75,16 @@ def normality_test():
         if not dataset_id or not column:
             return jsonify({'success': False, 'error': 'Dataset ID and column are required'}), 400
         
-        dataset = Dataset.query.get_or_404(dataset_id)
         service = StatisticalTests()
+        result = service.normality_test(dataset_id, column, test_type)
         
-        result = service.test_normality(dataset.file_path, column, test_type)
-        
-        return jsonify({
-            'success': True,
-            'result': result
-        })
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'result': result['results']
+            })
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 400
         
     except Exception as e:
         logging.error(f"Normality test error: {str(e)}")
@@ -100,15 +102,16 @@ def correlation_test():
         if not dataset_id or not column1 or not column2:
             return jsonify({'success': False, 'error': 'Dataset ID and both columns are required'}), 400
         
-        dataset = Dataset.query.get_or_404(dataset_id)
         service = StatisticalTests()
+        result = service.correlation_test(dataset_id, column1, column2, method)
         
-        result = service.correlation_test(dataset.file_path, column1, column2, method)
-        
-        return jsonify({
-            'success': True,
-            'result': result
-        })
+        if result['success']:
+            return jsonify({
+                'success': True,
+                'result': result['results']
+            })
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 400
         
     except Exception as e:
         logging.error(f"Correlation test error: {str(e)}")

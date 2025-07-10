@@ -13,6 +13,14 @@ document.addEventListener('DOMContentLoaded', function() {
     loadDatasets();
     setupEventListeners();
     
+    // Utility function to safely format numbers
+    function safeFormat(value, decimals = 4) {
+        if (value === null || value === undefined || isNaN(value)) {
+            return 'N/A';
+        }
+        return typeof value === 'number' ? value.toFixed(decimals) : value;
+    }
+    
     // Event listeners
     function setupEventListeners() {
         refreshButton.addEventListener('click', loadDatasets);
@@ -226,32 +234,68 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('descriptive-results');
         
         let html = '<div class="stats-table-container">';
-        html += '<table class="stats-table">';
-        html += '<thead><tr><th>Statistic</th>';
         
-        Object.keys(stats).forEach(column => {
-            html += `<th>${column}</th>`;
-        });
-        
-        html += '</tr></thead><tbody>';
-        
-        const statNames = ['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max'];
-        
-        statNames.forEach(stat => {
-            html += `<tr><td><strong>${stat}</strong></td>`;
-            Object.values(stats).forEach(columnStats => {
-                const value = columnStats[stat];
-                if (value !== undefined && value !== null) {
-                    const displayValue = stat === 'count' ? value : parseFloat(value).toFixed(3);
-                    html += `<td>${displayValue}</td>`;
-                } else {
-                    html += `<td>N/A</td>`;
-                }
+        // Handle both numeric and categorical statistics
+        if (stats.numeric) {
+            html += '<h4>Numeric Variables</h4>';
+            html += '<table class="stats-table">';
+            html += '<thead><tr><th>Statistic</th>';
+            
+            Object.keys(stats.numeric).forEach(column => {
+                html += `<th>${column}</th>`;
             });
-            html += '</tr>';
-        });
+            
+            html += '</tr></thead><tbody>';
+            
+            const statNames = ['count', 'mean', 'std', 'min', '25%', '50%', '75%', 'max'];
+            
+            statNames.forEach(stat => {
+                html += `<tr><td><strong>${stat}</strong></td>`;
+                Object.values(stats.numeric).forEach(columnStats => {
+                    const value = columnStats[stat];
+                    if (value !== undefined && value !== null && !isNaN(value)) {
+                        const displayValue = stat === 'count' ? value : parseFloat(value).toFixed(3);
+                        html += `<td>${displayValue}</td>`;
+                    } else {
+                        html += `<td>N/A</td>`;
+                    }
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+        }
         
-        html += '</tbody></table></div>';
+        if (stats.categorical) {
+            html += '<h4>Categorical Variables</h4>';
+            html += '<table class="stats-table">';
+            html += '<thead><tr><th>Statistic</th>';
+            
+            Object.keys(stats.categorical).forEach(column => {
+                html += `<th>${column}</th>`;
+            });
+            
+            html += '</tr></thead><tbody>';
+            
+            const catStatNames = ['count', 'unique', 'top', 'freq'];
+            
+            catStatNames.forEach(stat => {
+                html += `<tr><td><strong>${stat}</strong></td>`;
+                Object.values(stats.categorical).forEach(columnStats => {
+                    const value = columnStats[stat];
+                    if (value !== undefined && value !== null) {
+                        html += `<td>${value}</td>`;
+                    } else {
+                        html += `<td>N/A</td>`;
+                    }
+                });
+                html += '</tr>';
+            });
+            
+            html += '</tbody></table>';
+        }
+        
+        html += '</div>';
         container.innerHTML = html;
     }
     
@@ -303,6 +347,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayNormalityResult(result, column, testType) {
         const container = document.getElementById('normality-results');
         
+        // Safely handle undefined/null values
+        if (!result || typeof result.p_value === 'undefined' || result.p_value === null) {
+            container.innerHTML = `
+                <div class="test-result error">
+                    <h4>Normality Test Error</h4>
+                    <p>Unable to perform normality test on "${column}". This may be due to:</p>
+                    <ul>
+                        <li>Non-numeric data in selected column</li>
+                        <li>Insufficient data points</li>
+                        <li>Missing or invalid values</li>
+                    </ul>
+                </div>
+            `;
+            return;
+        }
+        
         const isNormal = result.p_value >= 0.05;
         const conclusion = isNormal ? 
             'The data appears to be normally distributed' : 
@@ -313,10 +373,13 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>${testType.replace('_', ' ').toUpperCase()} Test Results for "${column}"</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>Test Statistic:</strong> ${result.statistic.toFixed(4)}
+                        <strong>Test Statistic:</strong> ${result.test_statistic && typeof result.test_statistic === 'number' ? result.test_statistic.toFixed(4) : 'N/A'}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${result.p_value && typeof result.p_value === 'number' ? result.p_value.toFixed(4) : 'N/A'}
+                    </div>
+                    <div class="stat-item">
+                        <strong>Sample Size:</strong> ${result.sample_size || 'N/A'}
                     </div>
                     <div class="stat-item">
                         <strong>Significance Level:</strong> 0.05
@@ -535,17 +598,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>${testName} Results</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>T-statistic:</strong> ${result.statistic.toFixed(4)}
+                        <strong>T-statistic:</strong> ${safeFormat(result.test_statistic || result.statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
                         <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom || 'N/A'}
                     </div>
                     ${result.effect_size && typeof result.effect_size === 'number' ? `
                     <div class="stat-item">
-                        <strong>Effect Size:</strong> ${result.effect_size.toFixed(4)}
+                        <strong>Effect Size:</strong> ${safeFormat(result.effect_size)}
                     </div>
                     ` : ''}
                 </div>
@@ -642,10 +705,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <p><strong>Independent Variables:</strong> ${independent.join(', ')}</p>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>F-statistic:</strong> ${result.f_statistic.toFixed(4)}
+                        <strong>F-statistic:</strong> ${safeFormat(result.f_statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
                         <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom ? (Array.isArray(result.degrees_of_freedom) ? result.degrees_of_freedom.join(', ') : result.degrees_of_freedom) : 'N/A'}
@@ -726,16 +789,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>Chi-Square ${testName} Test Results</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>Chi-square statistic:</strong> ${result.chi2_statistic.toFixed(4)}
+                        <strong>Chi-square statistic:</strong> ${safeFormat(result.chi2_statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
                         <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom || 'N/A'}
                     </div>
                     <div class="stat-item">
-                        <strong>Cramér's V:</strong> ${result.cramers_v && typeof result.cramers_v === 'number' ? result.cramers_v.toFixed(4) : 'N/A'}
+                        <strong>Cramér's V:</strong> ${safeFormat(result.cramers_v)}
                     </div>
                 </div>
                 <div class="conclusion">
@@ -841,17 +904,17 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>${testName} Results</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>Test Statistic:</strong> ${(result.test_statistic || result.statistic || result.h_statistic || result.u_statistic || result.chi2_statistic).toFixed(4)}
+                        <strong>Test Statistic:</strong> ${safeFormat(result.test_statistic || result.statistic || result.h_statistic || result.u_statistic || result.chi2_statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
-                        <strong>Sample Size:</strong> ${result.sample_size || result.group1_size + result.group2_size || 'N/A'}
+                        <strong>Sample Size:</strong> ${result.sample_size || (result.group1_size && result.group2_size ? result.group1_size + result.group2_size : 'N/A')}
                     </div>
                     ${result.effect_size ? `
                     <div class="stat-item">
-                        <strong>Effect Size:</strong> ${result.effect_size.toFixed(4)}
+                        <strong>Effect Size:</strong> ${safeFormat(result.effect_size)}
                     </div>
                     ` : ''}
                 </div>
@@ -923,10 +986,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>${testName} Results</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>Test Statistic:</strong> ${result.test_statistic.toFixed(4)}
+                        <strong>Test Statistic:</strong> ${safeFormat(result.test_statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
                         <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom || 'N/A'}
@@ -998,10 +1061,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 <h4>McNemar Test Results: "${column1}" vs "${column2}"</h4>
                 <div class="result-stats">
                     <div class="stat-item">
-                        <strong>Test Statistic:</strong> ${result.test_statistic.toFixed(4)}
+                        <strong>Test Statistic:</strong> ${safeFormat(result.test_statistic)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value.toFixed(4)}
+                        <strong>P-value:</strong> ${safeFormat(result.p_value)}
                     </div>
                     <div class="stat-item">
                         <strong>Test Type:</strong> ${result.test_type}
@@ -1096,8 +1159,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     <tr>
                         <td>${comp.group1}</td>
                         <td>${comp.group2}</td>
-                        <td>${comp.mean_diff.toFixed(4)}</td>
-                        <td>${comp.p_value.toFixed(4)}</td>
+                        <td>${safeFormat(comp.mean_diff)}</td>
+                        <td>${safeFormat(comp.p_value)}</td>
                         <td>${comp.reject ? 'Yes' : 'No'}</td>
                     </tr>
                 `;
