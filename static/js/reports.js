@@ -57,15 +57,22 @@ document.addEventListener('DOMContentLoaded', function() {
         if (editBtn) editBtn.addEventListener('click', editReport);
         
         // Custom report controls
-        document.getElementById('add-section').addEventListener('click', addCustomSection);
-        document.getElementById('clear-sections').addEventListener('click', clearCustomSections);
+        const addSectionBtn = document.getElementById('add-section');
+        if (addSectionBtn) addSectionBtn.addEventListener('click', addCustomSection);
+        
+        const clearSectionsBtn = document.getElementById('clear-sections');
+        if (clearSectionsBtn) clearSectionsBtn.addEventListener('click', clearCustomSections);
         
         // Template management
-        document.getElementById('load-template').addEventListener('click', loadTemplate);
-        document.getElementById('delete-template').addEventListener('click', deleteTemplate);
+        const loadTemplateBtn = document.getElementById('load-template');
+        if (loadTemplateBtn) loadTemplateBtn.addEventListener('click', loadTemplate);
+        
+        const deleteTemplateBtn = document.getElementById('delete-template');
+        if (deleteTemplateBtn) deleteTemplateBtn.addEventListener('click', deleteTemplate);
         
         // Report scheduling
-        document.getElementById('schedule-report').addEventListener('click', scheduleReport);
+        const scheduleReportBtn = document.getElementById('schedule-report');
+        if (scheduleReportBtn) scheduleReportBtn.addEventListener('click', scheduleReport);
         
         // Section toggles
         setupSectionToggles();

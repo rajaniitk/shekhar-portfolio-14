@@ -6,17 +6,48 @@ from sklearn.feature_selection import mutual_info_classif, mutual_info_regressio
 from typing import Dict, List, Any, Optional, Tuple
 import logging
 import warnings
+import json
 warnings.filterwarnings('ignore')
 
 class ColumnAnalysis:
     """Comprehensive column-wise analysis service"""
     
-    def __init__(self, df: pd.DataFrame):
-        self.df = df
+    def __init__(self, file_path: str = None):
+        self.file_path = file_path
+        self.df = None
+        if file_path:
+            self.df = pd.read_csv(file_path)
         self.logger = logging.getLogger(__name__)
-        self.numeric_columns = df.select_dtypes(include=[np.number]).columns.tolist()
-        self.categorical_columns = df.select_dtypes(include=['object']).columns.tolist()
-        self.datetime_columns = df.select_dtypes(include=['datetime64']).columns.tolist()
+    
+    def _load_dataframe(self, file_path: str = None):
+        """Load DataFrame from file path"""
+        path = file_path or self.file_path
+        if not path:
+            raise ValueError("No file path provided")
+        self.df = pd.read_csv(path)
+        self.numeric_columns = self.df.select_dtypes(include=[np.number]).columns.tolist()
+        self.categorical_columns = self.df.select_dtypes(include=['object']).columns.tolist()
+        self.datetime_columns = self.df.select_dtypes(include=['datetime64']).columns.tolist()
+    
+    def _convert_numpy_types(self, obj):
+        """Convert numpy types to native Python types for JSON serialization"""
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            if np.isnan(obj) or np.isinf(obj):
+                return None
+            return float(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif isinstance(obj, dict):
+            return {key: self._convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [self._convert_numpy_types(item) for item in obj]
+        elif pd.isna(obj):
+            return None
+        return obj
     
     def analyze_columns(self, columns: List[str], analysis_type: str = 'comprehensive') -> Dict[str, Any]:
         """Analyze specific columns"""
@@ -353,6 +384,167 @@ class ColumnAnalysis:
             self.logger.error(f"Error in temporal analysis: {str(e)}")
             raise
     
+    def get_column_summary(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Get comprehensive column summary for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            summary = self.comprehensive_column_summary(column)
+            return self._convert_numpy_types(summary)
+        except Exception as e:
+            self.logger.error(f"Error getting column summary: {str(e)}")
+            raise
+    
+    def detect_outliers(self, file_path: str, column: str, method: str = 'iqr') -> Dict[str, Any]:
+        """Detect outliers for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            outliers = self.outlier_analysis(column, method)
+            return self._convert_numpy_types(outliers)
+        except Exception as e:
+            self.logger.error(f"Error detecting outliers: {str(e)}")
+            raise
+    
+    def analyze_distribution(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Analyze distribution for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            distribution = self.distribution_analysis(column)
+            return self._convert_numpy_types(distribution)
+        except Exception as e:
+            self.logger.error(f"Error analyzing distribution: {str(e)}")
+            raise
+    
+    def analyze_missing_values(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Analyze missing values for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            missing = self.missing_value_analysis(column)
+            return self._convert_numpy_types(missing)
+        except Exception as e:
+            self.logger.error(f"Error analyzing missing values: {str(e)}")
+            raise
+    
+    def analyze_unique_values(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Analyze unique values for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            if column not in self.df.columns:
+                raise ValueError(f"Column {column} not found")
+            
+            data = self.df[column]
+            unique_analysis = {
+                'column': column,
+                'unique_count': int(data.nunique()),
+                'total_count': int(len(data)),
+                'unique_percentage': float((data.nunique() / len(data)) * 100),
+                'value_counts': data.value_counts().head(20).to_dict(),
+                'most_frequent': data.mode().iloc[0] if not data.mode().empty else None,
+                'least_frequent_values': data.value_counts().tail(10).to_dict()
+            }
+            return self._convert_numpy_types(unique_analysis)
+        except Exception as e:
+            self.logger.error(f"Error analyzing unique values: {str(e)}")
+            raise
+    
+    def assess_data_quality(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Assess data quality for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            quality = self.data_quality_analysis(column)
+            return self._convert_numpy_types(quality)
+        except Exception as e:
+            self.logger.error(f"Error assessing data quality: {str(e)}")
+            raise
+    
+    def detect_patterns(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Detect patterns for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            if column not in self.df.columns:
+                raise ValueError(f"Column {column} not found")
+            
+            data = self.df[column]
+            patterns = {
+                'column': column,
+                'data_type': str(data.dtype),
+                'patterns': []
+            }
+            
+            if data.dtype == 'object':
+                # String pattern analysis
+                patterns['string_patterns'] = {
+                    'average_length': float(data.astype(str).str.len().mean()) if not data.empty else 0,
+                    'contains_numbers': bool(data.astype(str).str.contains(r'\d', na=False).any()),
+                    'contains_special_chars': bool(data.astype(str).str.contains(r'[^a-zA-Z0-9\s]', na=False).any()),
+                    'all_uppercase': int(data.astype(str).str.isupper().sum()),
+                    'all_lowercase': int(data.astype(str).str.islower().sum())
+                }
+            
+            return self._convert_numpy_types(patterns)
+        except Exception as e:
+            self.logger.error(f"Error detecting patterns: {str(e)}")
+            raise
+    
+    def perform_temporal_analysis(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Perform temporal analysis for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            temporal = self.temporal_analysis(column)
+            return self._convert_numpy_types(temporal)
+        except Exception as e:
+            self.logger.error(f"Error performing temporal analysis: {str(e)}")
+            raise
+    
+    def perform_categorical_analysis(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Perform categorical analysis for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            categorical = self.categorical_analysis(column)
+            return self._convert_numpy_types(categorical)
+        except Exception as e:
+            self.logger.error(f"Error performing categorical analysis: {str(e)}")
+            raise
+    
+    def perform_numerical_analysis(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Perform numerical analysis for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            if column not in self.df.columns:
+                raise ValueError(f"Column {column} not found")
+            
+            data = self.df[column]
+            if not pd.api.types.is_numeric_dtype(data):
+                raise ValueError(f"Column {column} is not numeric")
+            
+            numerical = {
+                'column': column,
+                'basic_stats': self._get_descriptive_statistics(data),
+                'distribution': self._analyze_numeric_distribution(data),
+                'outliers': self._analyze_outliers(data),
+                'normality': self._test_normality(data)
+            }
+            return self._convert_numpy_types(numerical)
+        except Exception as e:
+            self.logger.error(f"Error performing numerical analysis: {str(e)}")
+            raise
+    
+    def get_recommendations(self, file_path: str, column: str) -> Dict[str, Any]:
+        """Get recommendations for API endpoint"""
+        try:
+            self._load_dataframe(file_path)
+            if column not in self.df.columns:
+                raise ValueError(f"Column {column} not found")
+            
+            data = self.df[column]
+            recommendations = {
+                'column': column,
+                'recommendations': self._generate_column_recommendations(data, column, {})
+            }
+            return self._convert_numpy_types(recommendations)
+        except Exception as e:
+            self.logger.error(f"Error getting recommendations: {str(e)}")
+            raise
+
     def comprehensive_column_summary(self, column: str) -> Dict[str, Any]:
         """Generate comprehensive column summary"""
         try:

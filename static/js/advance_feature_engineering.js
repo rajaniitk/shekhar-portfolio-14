@@ -554,6 +554,12 @@ document.addEventListener('DOMContentLoaded', function() {
     function updateFeaturesList() {
         const container = document.getElementById('engineered-features-list');
         
+        // Check if container exists before trying to update it
+        if (!container) {
+            console.warn('Features list container not found. The DOM element with id "engineered-features-list" does not exist.');
+            return;
+        }
+        
         if (engineeredFeatures.length === 0) {
             container.innerHTML = '<p>No engineered features yet. Use the techniques above to create new features.</p>';
             return;

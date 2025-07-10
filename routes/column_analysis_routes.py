@@ -38,7 +38,7 @@ def get_datasets():
         # Return a JSON response indicating failure and the error message, with a 500 status code
         return jsonify({'success': False, 'error': f"An internal server error occurred while retrieving datasets: {str(e)}"}), 500
 
-@column_analysis_bp.route('/analyze/<int:dataset_id>', methods=['POST'])
+@column_analysis_bp.route('/datasets')
 def get_datasets():
     """Get all available datasets for analysis operations"""
     try:
@@ -91,7 +91,7 @@ def get_column_summary(dataset_id):
         
     except Exception as e:
         logging.error(f"Column summary error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/outliers/<int:dataset_id>')
 def detect_outliers(dataset_id):
@@ -114,7 +114,7 @@ def detect_outliers(dataset_id):
         
     except Exception as e:
         logging.error(f"Outlier detection error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/distribution/<int:dataset_id>')
 def analyze_distribution(dataset_id):
@@ -136,7 +136,7 @@ def analyze_distribution(dataset_id):
         
     except Exception as e:
         logging.error(f"Distribution analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/missing_values/<int:dataset_id>')
 def analyze_missing_values(dataset_id):
@@ -158,7 +158,7 @@ def analyze_missing_values(dataset_id):
         
     except Exception as e:
         logging.error(f"Missing values analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/unique_values/<int:dataset_id>')
 def analyze_unique_values(dataset_id):
@@ -180,7 +180,7 @@ def analyze_unique_values(dataset_id):
         
     except Exception as e:
         logging.error(f"Unique values analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/data_quality/<int:dataset_id>')
 def assess_data_quality(dataset_id):
@@ -202,7 +202,7 @@ def assess_data_quality(dataset_id):
         
     except Exception as e:
         logging.error(f"Data quality assessment error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/patterns/<int:dataset_id>')
 def detect_patterns(dataset_id):
@@ -224,7 +224,7 @@ def detect_patterns(dataset_id):
         
     except Exception as e:
         logging.error(f"Pattern detection error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/temporal_analysis/<int:dataset_id>')
 def temporal_analysis(dataset_id):
@@ -246,7 +246,7 @@ def temporal_analysis(dataset_id):
         
     except Exception as e:
         logging.error(f"Temporal analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/categorical_analysis/<int:dataset_id>')
 def categorical_analysis(dataset_id):
@@ -268,7 +268,7 @@ def categorical_analysis(dataset_id):
         
     except Exception as e:
         logging.error(f"Categorical analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/numerical_analysis/<int:dataset_id>')
 def numerical_analysis(dataset_id):
@@ -290,7 +290,7 @@ def numerical_analysis(dataset_id):
         
     except Exception as e:
         logging.error(f"Numerical analysis error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500
 
 @column_analysis_bp.route('/recommendations/<int:dataset_id>')
 def get_recommendations(dataset_id):
@@ -312,4 +312,4 @@ def get_recommendations(dataset_id):
         
     except Exception as e:
         logging.error(f"Recommendations error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': f"An unexpected server error occurred: {str(e)}"}), 500

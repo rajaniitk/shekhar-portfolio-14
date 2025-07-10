@@ -389,6 +389,22 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayCorrelationResult(result, column1, column2, method) {
         const container = document.getElementById('correlation-results');
         
+        // Safely handle undefined or null result
+        if (!result || typeof result.correlation === 'undefined' || result.correlation === null) {
+            container.innerHTML = `
+                <div class="test-result error">
+                    <h4>Correlation Test Error</h4>
+                    <p>Unable to calculate correlation between "${column1}" and "${column2}". This may be due to:</p>
+                    <ul>
+                        <li>Non-numeric data in selected columns</li>
+                        <li>Insufficient data points</li>
+                        <li>Missing or invalid values</li>
+                    </ul>
+                </div>
+            `;
+            return;
+        }
+        
         const strength = Math.abs(result.correlation);
         let strengthText = 'weak';
         if (strength > 0.7) strengthText = 'strong';
@@ -404,7 +420,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>Correlation Coefficient:</strong> ${result.correlation.toFixed(4)}
                     </div>
                     <div class="stat-item">
-                        <strong>P-value:</strong> ${result.p_value ? result.p_value.toFixed(4) : 'N/A'}
+                        <strong>P-value:</strong> ${result.p_value && typeof result.p_value === 'number' ? result.p_value.toFixed(4) : 'N/A'}
                     </div>
                     <div class="stat-item">
                         <strong>Sample Size:</strong> ${result.sample_size || 'N/A'}
@@ -500,6 +516,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayTTestResult(result, testType, alpha) {
         const container = document.getElementById('ttest-results');
         
+        // Safely handle undefined or null result
+        if (!result || typeof result.statistic === 'undefined' || typeof result.p_value === 'undefined') {
+            container.innerHTML = `
+                <div class="test-result error">
+                    <h4>T-Test Error</h4>
+                    <p>Unable to perform T-test. Please check that the selected columns contain valid numeric data.</p>
+                </div>
+            `;
+            return;
+        }
+        
         const isSignificant = result.p_value < alpha;
         const testName = testType.replace('_', ' ').toUpperCase() + ' T-Test';
         
@@ -516,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     <div class="stat-item">
                         <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom || 'N/A'}
                     </div>
-                    ${result.effect_size ? `
+                    ${result.effect_size && typeof result.effect_size === 'number' ? `
                     <div class="stat-item">
                         <strong>Effect Size:</strong> ${result.effect_size.toFixed(4)}
                     </div>
@@ -595,6 +622,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayANOVAResult(result, dependent, independent, anovaType) {
         const container = document.getElementById('anova-results');
         
+        // Safely handle undefined or null result
+        if (!result || typeof result.f_statistic === 'undefined' || typeof result.p_value === 'undefined') {
+            container.innerHTML = `
+                <div class="test-result error">
+                    <h4>ANOVA Error</h4>
+                    <p>Unable to perform ANOVA test. Please check that the selected variables contain valid data.</p>
+                </div>
+            `;
+            return;
+        }
+        
         const isSignificant = result.p_value < 0.05;
         
         const html = `
@@ -610,7 +648,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>P-value:</strong> ${result.p_value.toFixed(4)}
                     </div>
                     <div class="stat-item">
-                        <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom.join(', ')}
+                        <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom ? (Array.isArray(result.degrees_of_freedom) ? result.degrees_of_freedom.join(', ') : result.degrees_of_freedom) : 'N/A'}
                     </div>
                 </div>
                 <div class="conclusion">
@@ -669,6 +707,17 @@ document.addEventListener('DOMContentLoaded', function() {
     function displayChiSquareResult(result, testType) {
         const container = document.getElementById('chi-square-results');
         
+        // Safely handle undefined or null result
+        if (!result || typeof result.chi2_statistic === 'undefined' || typeof result.p_value === 'undefined') {
+            container.innerHTML = `
+                <div class="test-result error">
+                    <h4>Chi-Square Test Error</h4>
+                    <p>Unable to perform Chi-square test. Please check that the selected variables contain valid categorical data.</p>
+                </div>
+            `;
+            return;
+        }
+        
         const isSignificant = result.p_value < 0.05;
         const testName = testType.replace('_', ' ').toUpperCase();
         
@@ -683,10 +732,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         <strong>P-value:</strong> ${result.p_value.toFixed(4)}
                     </div>
                     <div class="stat-item">
-                        <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom}
+                        <strong>Degrees of Freedom:</strong> ${result.degrees_of_freedom || 'N/A'}
                     </div>
                     <div class="stat-item">
-                        <strong>Cramér's V:</strong> ${result.cramers_v.toFixed(4)}
+                        <strong>Cramér's V:</strong> ${result.cramers_v && typeof result.cramers_v === 'number' ? result.cramers_v.toFixed(4) : 'N/A'}
                     </div>
                 </div>
                 <div class="conclusion">
@@ -983,15 +1032,15 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading('Running multiple comparison...');
         
         try {
-            const response = await fetch('/api/statistical/multiple_comparisons', {
+            const response = await fetch('/api/statistical/multiple_comparison', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
                     dataset_id: currentDatasetId,
-                    dependent_var: dependent,
-                    independent_var: independent,
+                    dependent: dependent,
+                    independent: independent,
                     method: method
                 })
             });

@@ -242,37 +242,52 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function performDatasetComparison(datasetIds) {
-        const datasets = getStoredDatasets();
-        const selectedDatasets = datasets.filter(d => datasetIds.includes(d.id.toString()));
-        
-        // Generate mock comparison data
-        const comparison = {
-            overview: {
-                datasets: selectedDatasets.map(d => ({
-                    name: d.name,
-                    rows: d.rows,
-                    columns: d.columns,
-                    memory_usage: `${(Math.random() * 50 + 10).toFixed(1)} MB`,
-                    missing_values: Math.floor(Math.random() * 100)
-                }))
-            },
-            schema_comparison: {
-                common_columns: ['customer_id', 'age', 'income'],
-                unique_columns: {
-                    [selectedDatasets[0].name]: ['score', 'segment'],
-                    [selectedDatasets[1].name]: ['rating', 'category']
+    async function performDatasetComparison(datasetIds) {
+        try {
+            const response = await fetch('/api/comparison/datasets', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
                 },
-                data_type_differences: [
-                    { column: 'age', dataset1: 'int64', dataset2: 'float64' },
-                    { column: 'income', dataset1: 'int64', dataset2: 'int64' }
-                ]
-            },
-            statistical_comparison: generateStatisticalComparison(selectedDatasets),
-            quality_comparison: generateQualityComparison(selectedDatasets)
-        };
-        
-        return comparison;
+                body: JSON.stringify({ dataset_ids: datasetIds })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+                return data.comparison;
+            } else {
+                throw new Error(data.error || 'Failed to compare datasets');
+            }
+        } catch (error) {
+            console.error('Error comparing datasets:', error);
+            // Fallback to basic comparison using stored data
+            const datasets = getStoredDatasets();
+            const selectedDatasets = datasets.filter(d => datasetIds.includes(d.id.toString()));
+            
+            return {
+                overview: {
+                    datasets: selectedDatasets.map(d => ({
+                        name: d.name || d.filename,
+                        rows: d.rows,
+                        columns: d.columns,
+                        memory_usage: d.file_size ? `${(d.file_size / (1024*1024)).toFixed(1)} MB` : 'Unknown',
+                        missing_values: 'Unknown'
+                    }))
+                },
+                schema_comparison: {
+                    common_columns: [],
+                    unique_columns: {},
+                    data_type_differences: []
+                },
+                statistical_comparison: [],
+                quality_comparison: [],
+                error: 'Detailed comparison unavailable - API error'
+            };
+        }
     }
     
     function generateStatisticalComparison(datasets) {
@@ -491,7 +506,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showLoading();
         
         try {
-            const comparison = performColumnComparison(datasetId, column1, datasetId, column2);
+            const comparison = await performColumnComparison(datasetId, column1, datasetId, column2);
             displayColumnComparison(comparison);
             
         } catch (error) {
@@ -502,45 +517,73 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function performColumnComparison(dataset1Id, column1, dataset2Id, column2) {
-        const datasets = getStoredDatasets();
-        const dataset1 = datasets.find(d => d.id == dataset1Id);
-        const dataset2 = datasets.find(d => d.id == dataset2Id);
-        
-        // Generate mock column comparison
-        return {
-            column1: {
-                dataset: dataset1.name,
-                column: column1,
-                type: 'numeric',
-                stats: {
-                    count: dataset1.rows,
-                    mean: (Math.random() * 100 + 50).toFixed(2),
-                    std: (Math.random() * 20 + 10).toFixed(2),
-                    min: Math.floor(Math.random() * 100),
-                    max: Math.floor(Math.random() * 1000 + 500),
-                    unique: Math.floor(Math.random() * 500 + 100)
-                }
-            },
-            column2: {
-                dataset: dataset2.name,
-                column: column2,
-                type: 'numeric',
-                stats: {
-                    count: dataset2.rows,
-                    mean: (Math.random() * 100 + 50).toFixed(2),
-                    std: (Math.random() * 20 + 10).toFixed(2),
-                    min: Math.floor(Math.random() * 100),
-                    max: Math.floor(Math.random() * 1000 + 500),
-                    unique: Math.floor(Math.random() * 500 + 100)
-                }
-            },
-            tests: {
-                correlation: (Math.random() * 2 - 1).toFixed(4),
-                t_test_p_value: Math.random().toFixed(6),
-                ks_test_p_value: Math.random().toFixed(6)
+    async function performColumnComparison(dataset1Id, column1, dataset2Id, column2) {
+        try {
+            const response = await fetch('/api/comparison/columns', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    dataset1_id: dataset1Id,
+                    column1: column1,
+                    dataset2_id: dataset2Id,
+                    column2: column2
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-        };
+
+            const data = await response.json();
+            if (data.success) {
+                return data.comparison;
+            } else {
+                throw new Error(data.error || 'Failed to compare columns');
+            }
+        } catch (error) {
+            console.error('Error comparing columns:', error);
+            // Fallback to basic comparison using stored data
+            const datasets = getStoredDatasets();
+            const dataset1 = datasets.find(d => d.id == dataset1Id);
+            const dataset2 = datasets.find(d => d.id == dataset2Id);
+            
+            return {
+                column1: {
+                    dataset: dataset1 ? (dataset1.name || dataset1.filename) : 'Unknown',
+                    column: column1,
+                    type: 'unknown',
+                    stats: {
+                        count: dataset1 ? dataset1.rows : 'Unknown',
+                        mean: 'Unknown',
+                        std: 'Unknown',
+                        min: 'Unknown',
+                        max: 'Unknown',
+                        unique: 'Unknown'
+                    }
+                },
+                column2: {
+                    dataset: dataset2 ? (dataset2.name || dataset2.filename) : 'Unknown',
+                    column: column2,
+                    type: 'unknown',
+                    stats: {
+                        count: dataset2 ? dataset2.rows : 'Unknown',
+                        mean: 'Unknown',
+                        std: 'Unknown',
+                        min: 'Unknown',
+                        max: 'Unknown',
+                        unique: 'Unknown'
+                    }
+                },
+                tests: {
+                    correlation: 'Unable to calculate',
+                    t_test_p_value: 'Unable to calculate',
+                    ks_test_p_value: 'Unable to calculate'
+                },
+                error: 'Column comparison unavailable - API error'
+            };
+        }
     }
     
     function displayColumnComparison(comparison) {
