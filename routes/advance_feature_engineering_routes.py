@@ -42,284 +42,154 @@ def get_datasets():
 @advance_feature_engineering_bp.route('/pca/<int:dataset_id>', methods=['POST'])
 def perform_pca(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
+        columns = request.json.get('columns')
         n_components = request.json.get('n_components', 2)
         
-        if not columns:
-            return jsonify({'error': 'Columns parameter is required'}), 400
-        
-        result = engineer.perform_pca(dataset.file_path, columns, n_components)
+        result = engineer.pca_analysis(dataset_id, n_components, columns)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'result': result['result'],
-                'explained_variance': result['explained_variance'],
-                'components': result['components']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
         logging.error(f"PCA error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@advance_feature_engineering_bp.route('/lda/<int:dataset_id>', methods=['POST'])
-def perform_lda(dataset_id):
+@advance_feature_engineering_bp.route('/feature-selection/<int:dataset_id>', methods=['POST'])
+def feature_selection(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
         target_column = request.json.get('target_column')
-        n_components = request.json.get('n_components', 2)
+        method = request.json.get('method', 'selectkbest')
+        k = request.json.get('k', 10)
         
-        if not columns or not target_column:
-            return jsonify({'error': 'Columns and target_column parameters are required'}), 400
+        if not target_column:
+            return jsonify({'success': False, 'error': 'Target column is required'}), 400
         
-        result = engineer.perform_lda(dataset.file_path, columns, target_column, n_components)
+        result = engineer.feature_selection(dataset_id, target_column, method, k)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'result': result['result'],
-                'explained_variance': result['explained_variance'],
-                'components': result['components']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
-        logging.error(f"LDA error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Feature selection error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@advance_feature_engineering_bp.route('/ica/<int:dataset_id>', methods=['POST'])
-def perform_ica(dataset_id):
+@advance_feature_engineering_bp.route('/dimensionality-reduction/<int:dataset_id>', methods=['POST'])
+def dimensionality_reduction(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
+        method = request.json.get('method', 'tsne')
         n_components = request.json.get('n_components', 2)
+        columns = request.json.get('columns')
         
-        if not columns:
-            return jsonify({'error': 'Columns parameter is required'}), 400
-        
-        result = engineer.perform_ica(dataset.file_path, columns, n_components)
+        result = engineer.dimensionality_reduction(dataset_id, method, n_components, columns)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'result': result['result'],
-                'components': result['components']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
-        logging.error(f"ICA error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Dimensionality reduction error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@advance_feature_engineering_bp.route('/clustering/<int:dataset_id>', methods=['POST'])
+def clustering_analysis(dataset_id):
+    try:
+        engineer = AdvanceFeatureEngineering()
+        
+        algorithm = request.json.get('algorithm', 'kmeans')
+        n_clusters = request.json.get('n_clusters', 3)
+        columns = request.json.get('columns')
+        
+        result = engineer.clustering_analysis(dataset_id, algorithm, n_clusters, columns)
+        
+        if result['success']:
+            return jsonify(result)
+        else:
+            return jsonify({'success': False, 'error': result['error']}), 400
+            
+    except Exception as e:
+        logging.error(f"Clustering error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @advance_feature_engineering_bp.route('/rfe/<int:dataset_id>', methods=['POST'])
-def perform_rfe(dataset_id):
+def rfe_analysis(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
         target_column = request.json.get('target_column')
         n_features = request.json.get('n_features', 10)
         estimator = request.json.get('estimator', 'random_forest')
         
-        if not columns or not target_column:
-            return jsonify({'error': 'Columns and target_column parameters are required'}), 400
+        if not target_column:
+            return jsonify({'success': False, 'error': 'Target column is required'}), 400
         
-        result = engineer.perform_rfe(dataset.file_path, columns, target_column, n_features, estimator)
+        result = engineer.rfe_analysis(dataset_id, target_column, n_features, estimator)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'selected_features': result['selected_features'],
-                'feature_ranking': result['feature_ranking'],
-                'scores': result['scores']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
         logging.error(f"RFE error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@advance_feature_engineering_bp.route('/univariate_selection/<int:dataset_id>', methods=['POST'])
-def univariate_selection(dataset_id):
+@advance_feature_engineering_bp.route('/time-features/<int:dataset_id>', methods=['POST'])
+def time_features(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
-        target_column = request.json.get('target_column')
-        k = request.json.get('k', 10)
-        score_func = request.json.get('score_func', 'f_classif')
+        column = request.json.get('column')
+        features = request.json.get('features', [])
         
-        if not columns or not target_column:
-            return jsonify({'error': 'Columns and target_column parameters are required'}), 400
+        if not column:
+            return jsonify({'success': False, 'error': 'Column parameter is required'}), 400
         
-        result = engineer.univariate_feature_selection(dataset.file_path, columns, target_column, k, score_func)
+        if not features:
+            return jsonify({'success': False, 'error': 'Features parameter is required'}), 400
+        
+        result = engineer.time_series_features(dataset_id, column, features)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'selected_features': result['selected_features'],
-                'scores': result['scores'],
-                'p_values': result['p_values']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
-        logging.error(f"Univariate selection error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Time features error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
 
-@advance_feature_engineering_bp.route('/lasso_selection/<int:dataset_id>', methods=['POST'])
-def lasso_selection(dataset_id):
+@advance_feature_engineering_bp.route('/text-features/<int:dataset_id>', methods=['POST'])
+def text_features(dataset_id):
     try:
-        dataset = Dataset.query.get_or_404(dataset_id)
         engineer = AdvanceFeatureEngineering()
         
-        columns = request.json.get('columns', [])
-        target_column = request.json.get('target_column')
-        alpha = request.json.get('alpha', 0.01)
+        column = request.json.get('column')
+        features = request.json.get('features', [])
         
-        if not columns or not target_column:
-            return jsonify({'error': 'Columns and target_column parameters are required'}), 400
+        if not column:
+            return jsonify({'success': False, 'error': 'Column parameter is required'}), 400
         
-        result = engineer.lasso_feature_selection(dataset.file_path, columns, target_column, alpha)
+        if not features:
+            return jsonify({'success': False, 'error': 'Features parameter is required'}), 400
         
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'selected_features': result['selected_features'],
-                'coefficients': result['coefficients']
-            })
-        else:
-            return jsonify({'error': result['error']}), 400
-            
-    except Exception as e:
-        logging.error(f"Lasso selection error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@advance_feature_engineering_bp.route('/tree_selection/<int:dataset_id>', methods=['POST'])
-def tree_based_selection(dataset_id):
-    try:
-        dataset = Dataset.query.get_or_404(dataset_id)
-        engineer = AdvanceFeatureEngineering()
-        
-        columns = request.json.get('columns', [])
-        target_column = request.json.get('target_column')
-        estimator = request.json.get('estimator', 'random_forest')
-        threshold = request.json.get('threshold', 'mean')
-        
-        if not columns or not target_column:
-            return jsonify({'error': 'Columns and target_column parameters are required'}), 400
-        
-        result = engineer.tree_based_feature_selection(dataset.file_path, columns, target_column, estimator, threshold)
+        result = engineer.text_features(dataset_id, column, features)
         
         if result['success']:
-            return jsonify({
-                'success': True,
-                'selected_features': result['selected_features'],
-                'feature_importance': result['feature_importance']
-            })
+            return jsonify(result)
         else:
-            return jsonify({'error': result['error']}), 400
+            return jsonify({'success': False, 'error': result['error']}), 400
             
     except Exception as e:
-        logging.error(f"Tree-based selection error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@advance_feature_engineering_bp.route('/clustering/<int:dataset_id>', methods=['POST'])
-def perform_clustering(dataset_id):
-    try:
-        dataset = Dataset.query.get_or_404(dataset_id)
-        engineer = AdvanceFeatureEngineering()
-        
-        columns = request.json.get('columns', [])
-        algorithm = request.json.get('algorithm', 'kmeans')
-        n_clusters = request.json.get('n_clusters', 3)
-        
-        if not columns:
-            return jsonify({'error': 'Columns parameter is required'}), 400
-        
-        result = engineer.perform_clustering(dataset.file_path, columns, algorithm, n_clusters)
-        
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'labels': result['labels'],
-                'centers': result.get('centers'),
-                'silhouette_score': result.get('silhouette_score'),
-                'inertia': result.get('inertia')
-            })
-        else:
-            return jsonify({'error': result['error']}), 400
-            
-    except Exception as e:
-        logging.error(f"Clustering error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@advance_feature_engineering_bp.route('/tsne/<int:dataset_id>', methods=['POST'])
-def perform_tsne(dataset_id):
-    try:
-        dataset = Dataset.query.get_or_404(dataset_id)
-        engineer = AdvanceFeatureEngineering()
-        
-        columns = request.json.get('columns', [])
-        n_components = request.json.get('n_components', 2)
-        perplexity = request.json.get('perplexity', 30)
-        
-        if not columns:
-            return jsonify({'error': 'Columns parameter is required'}), 400
-        
-        result = engineer.perform_tsne(dataset.file_path, columns, n_components, perplexity)
-        
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'result': result['result']
-            })
-        else:
-            return jsonify({'error': result['error']}), 400
-            
-    except Exception as e:
-        logging.error(f"t-SNE error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@advance_feature_engineering_bp.route('/umap/<int:dataset_id>', methods=['POST'])
-def perform_umap(dataset_id):
-    try:
-        dataset = Dataset.query.get_or_404(dataset_id)
-        engineer = AdvanceFeatureEngineering()
-        
-        columns = request.json.get('columns', [])
-        n_components = request.json.get('n_components', 2)
-        n_neighbors = request.json.get('n_neighbors', 15)
-        
-        if not columns:
-            return jsonify({'error': 'Columns parameter is required'}), 400
-        
-        result = engineer.perform_umap(dataset.file_path, columns, n_components, n_neighbors)
-        
-        if result['success']:
-            return jsonify({
-                'success': True,
-                'result': result['result']
-            })
-        else:
-            return jsonify({'error': result['error']}), 400
-            
-    except Exception as e:
-        logging.error(f"UMAP error: {str(e)}")
-        return jsonify({'error': str(e)}), 500
+        logging.error(f"Text features error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500

@@ -689,3 +689,196 @@ class AdvanceFeatureEngineering:
         except Exception as e:
             current_app.logger.error(f"Autoencoder features error: {str(e)}")
             return {'success': False, 'error': str(e)}
+    
+    def time_series_features(self, dataset_id, column, features):
+        try:
+            dataset = Dataset.query.get_or_404(dataset_id)
+            df = self.data_processor.load_dataset(dataset)
+            
+            if column not in df.columns:
+                return {'success': False, 'error': f'Column {column} not found'}
+            
+            # Try to convert to datetime if not already
+            try:
+                df[column] = pd.to_datetime(df[column])
+            except:
+                return {'success': False, 'error': f'Column {column} cannot be converted to datetime'}
+            
+            new_features = {}
+            feature_names = []
+            
+            for feature_type in features:
+                if feature_type == 'hour':
+                    new_col = f'{column}_hour'
+                    new_features[new_col] = df[column].dt.hour
+                    feature_names.append(new_col)
+                elif feature_type == 'day':
+                    new_col = f'{column}_day'
+                    new_features[new_col] = df[column].dt.day
+                    feature_names.append(new_col)
+                elif feature_type == 'month':
+                    new_col = f'{column}_month'
+                    new_features[new_col] = df[column].dt.month
+                    feature_names.append(new_col)
+                elif feature_type == 'year':
+                    new_col = f'{column}_year'
+                    new_features[new_col] = df[column].dt.year
+                    feature_names.append(new_col)
+                elif feature_type == 'weekday':
+                    new_col = f'{column}_weekday'
+                    new_features[new_col] = df[column].dt.dayofweek
+                    feature_names.append(new_col)
+                elif feature_type == 'quarter':
+                    new_col = f'{column}_quarter'
+                    new_features[new_col] = df[column].dt.quarter
+                    feature_names.append(new_col)
+                elif feature_type == 'week':
+                    new_col = f'{column}_week'
+                    new_features[new_col] = df[column].dt.isocalendar().week
+                    feature_names.append(new_col)
+                elif feature_type == 'is_weekend':
+                    new_col = f'{column}_is_weekend'
+                    new_features[new_col] = (df[column].dt.dayofweek >= 5).astype(int)
+                    feature_names.append(new_col)
+                elif feature_type == 'is_month_start':
+                    new_col = f'{column}_is_month_start'
+                    new_features[new_col] = df[column].dt.is_month_start.astype(int)
+                    feature_names.append(new_col)
+                elif feature_type == 'is_month_end':
+                    new_col = f'{column}_is_month_end'
+                    new_features[new_col] = df[column].dt.is_month_end.astype(int)
+                    feature_names.append(new_col)
+            
+            if not new_features:
+                return {'success': False, 'error': 'No valid time features selected'}
+            
+            # Convert to regular Python types for JSON serialization
+            for key, series in new_features.items():
+                new_features[key] = series.astype(float).tolist()
+            
+            results = {
+                'new_features': new_features,
+                'feature_names': feature_names,
+                'source_column': column,
+                'features_extracted': len(feature_names),
+                'feature_types': features
+            }
+            
+            # Save analysis
+            analysis = Analysis(
+                dataset_id=dataset_id,
+                analysis_type='time_series_features',
+                parameters={'column': column, 'features': features},
+                results=results,
+                status='completed'
+            )
+            db.session.add(analysis)
+            db.session.commit()
+            
+            return {'success': True, 'results': results}
+            
+        except Exception as e:
+            current_app.logger.error(f"Time series features error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
+    def text_features(self, dataset_id, column, features):
+        try:
+            dataset = Dataset.query.get_or_404(dataset_id)
+            df = self.data_processor.load_dataset(dataset)
+            
+            if column not in df.columns:
+                return {'success': False, 'error': f'Column {column} not found'}
+            
+            # Ensure column is string type
+            text_series = df[column].astype(str)
+            
+            new_features = {}
+            feature_names = []
+            
+            for feature_type in features:
+                if feature_type == 'length':
+                    new_col = f'{column}_length'
+                    new_features[new_col] = text_series.str.len()
+                    feature_names.append(new_col)
+                elif feature_type == 'word_count':
+                    new_col = f'{column}_word_count'
+                    new_features[new_col] = text_series.str.split().str.len()
+                    feature_names.append(new_col)
+                elif feature_type == 'char_count':
+                    new_col = f'{column}_char_count'
+                    new_features[new_col] = text_series.str.len()
+                    feature_names.append(new_col)
+                elif feature_type == 'digit_count':
+                    new_col = f'{column}_digit_count'
+                    new_features[new_col] = text_series.str.count(r'\d')
+                    feature_names.append(new_col)
+                elif feature_type == 'upper_count':
+                    new_col = f'{column}_upper_count'
+                    new_features[new_col] = text_series.str.count(r'[A-Z]')
+                    feature_names.append(new_col)
+                elif feature_type == 'lower_count':
+                    new_col = f'{column}_lower_count'
+                    new_features[new_col] = text_series.str.count(r'[a-z]')
+                    feature_names.append(new_col)
+                elif feature_type == 'space_count':
+                    new_col = f'{column}_space_count'
+                    new_features[new_col] = text_series.str.count(' ')
+                    feature_names.append(new_col)
+                elif feature_type == 'special_char_count':
+                    new_col = f'{column}_special_char_count'
+                    new_features[new_col] = text_series.str.count(r'[^\w\s]')
+                    feature_names.append(new_col)
+                elif feature_type == 'avg_word_length':
+                    new_col = f'{column}_avg_word_length'
+                    word_lengths = text_series.str.split().apply(lambda x: np.mean([len(word) for word in x]) if x else 0)
+                    new_features[new_col] = word_lengths
+                    feature_names.append(new_col)
+                elif feature_type == 'sentence_count':
+                    new_col = f'{column}_sentence_count'
+                    new_features[new_col] = text_series.str.count(r'[.!?]+')
+                    feature_names.append(new_col)
+                elif feature_type == 'unique_words':
+                    new_col = f'{column}_unique_words'
+                    unique_word_counts = text_series.str.split().apply(lambda x: len(set(x)) if x else 0)
+                    new_features[new_col] = unique_word_counts
+                    feature_names.append(new_col)
+                elif feature_type == 'readability':
+                    # Simple readability score based on average sentence and word length
+                    new_col = f'{column}_readability'
+                    avg_sentence_length = text_series.str.split('.').str.len()
+                    avg_word_length = text_series.str.split().apply(lambda x: np.mean([len(word) for word in x]) if x else 0)
+                    readability = 206.835 - (1.015 * avg_sentence_length) - (84.6 * avg_word_length)
+                    new_features[new_col] = readability.fillna(0)
+                    feature_names.append(new_col)
+            
+            if not new_features:
+                return {'success': False, 'error': 'No valid text features selected'}
+            
+            # Convert to regular Python types for JSON serialization
+            for key, series in new_features.items():
+                new_features[key] = series.fillna(0).astype(float).tolist()
+            
+            results = {
+                'new_features': new_features,
+                'feature_names': feature_names,
+                'source_column': column,
+                'features_extracted': len(feature_names),
+                'feature_types': features
+            }
+            
+            # Save analysis
+            analysis = Analysis(
+                dataset_id=dataset_id,
+                analysis_type='text_features',
+                parameters={'column': column, 'features': features},
+                results=results,
+                status='completed'
+            )
+            db.session.add(analysis)
+            db.session.commit()
+            
+            return {'success': True, 'results': results}
+            
+        except Exception as e:
+            current_app.logger.error(f"Text features error: {str(e)}")
+            return {'success': False, 'error': str(e)}

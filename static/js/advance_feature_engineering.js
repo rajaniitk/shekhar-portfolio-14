@@ -313,33 +313,69 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
     
-    function applyFeatureSelection() {
-        const selectedFeatures = getSelectedCheckboxes('fs-features-list');
+    async function applyFeatureSelection() {
+        const targetColumn = document.getElementById('selection-features-target').value;
         const method = document.getElementById('fs-method').value;
         const kValue = document.getElementById('fs-k-value').value || 5;
         
-        if (selectedFeatures.length === 0) {
-            showError('Please select features for selection');
+        if (!targetColumn) {
+            showError('Please select a target column for feature selection');
             return;
         }
         
-        // Mock feature selection - select top k features
-        const selectedTopK = selectedFeatures.slice(0, Math.min(kValue, selectedFeatures.length));
+        showLoading();
         
-        document.getElementById('fs-results').innerHTML = `
-            <div class="selection-results">
-                <h5>Feature Selection Results (${method})</h5>
-                <p>Selected top ${selectedTopK.length} features:</p>
-                <ul>
-                    ${selectedTopK.map(feature => `<li>${feature} (Score: ${(Math.random() * 100).toFixed(2)})</li>`).join('')}
-                </ul>
-            </div>
-        `;
-        
-        showSuccess(`Feature selection completed using ${method}`);
+        try {
+            const response = await fetch(`/api/advance-feature/feature-selection/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    target_column: targetColumn,
+                    method: method,
+                    k: parseInt(kValue)
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const results = result.results;
+                
+                document.getElementById('fs-results').innerHTML = `
+                    <div class="selection-results">
+                        <h5>Feature Selection Results (${method})</h5>
+                        <p>Selected ${results.n_features_selected} features out of ${results.total_features}:</p>
+                        <ul>
+                            ${results.selected_features.map(feature => {
+                                const score = results.feature_scores[feature] || 0;
+                                return `<li>${feature} (Score: ${score.toFixed(3)})</li>`;
+                            }).join('')}
+                        </ul>
+                        <p><strong>Target:</strong> ${results.target_column}</p>
+                        <p><strong>Method:</strong> ${results.method}</p>
+                    </div>
+                `;
+                
+                showSuccess(`Feature selection completed using ${method}`);
+            } else {
+                throw new Error(result.error || 'Feature selection failed');
+            }
+            
+        } catch (error) {
+            console.error('Error in feature selection:', error);
+            showError('Failed to perform feature selection: ' + error.message);
+        } finally {
+            hideLoading();
+        }
     }
     
-    function applyDimensionalityReduction() {
+    async function applyDimensionalityReduction() {
         const selectedFeatures = getSelectedCheckboxes('dr-features-list');
         const method = document.getElementById('dr-method').value;
         const components = document.getElementById('dr-components').value || 2;
@@ -349,35 +385,74 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create reduced dimension features
-        for (let i = 1; i <= components; i++) {
-            const newFeatureName = `${method}_component_${i}`;
-            const newValues = Array.from({length: 100}, () => Math.random() * 10 - 5);
+        showLoading();
+        
+        try {
+            const response = await fetch(`/api/advance-feature/dimensionality-reduction/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    method: method,
+                    n_components: parseInt(components),
+                    columns: selectedFeatures
+                })
+            });
             
-            const newFeature = {
-                name: newFeatureName,
-                type: 'numeric',
-                values: newValues,
-                engineered: true,
-                source: `${method} component ${i} from ${selectedFeatures.length} features`
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
-            engineeredFeatures.push(newFeature);
+            const result = await response.json();
+            
+            if (result.success) {
+                const results = result.results;
+                
+                // Add new features to the list
+                results.component_names.forEach(componentName => {
+                    const newFeature = {
+                        name: componentName,
+                        type: 'numeric',
+                        engineered: true,
+                        source: `${method} component from ${selectedFeatures.length} features`
+                    };
+                    engineeredFeatures.push(newFeature);
+                });
+                
+                let explainedVarianceText = '';
+                if (results.explained_variance) {
+                    const totalVariance = results.cumulative_variance 
+                        ? results.cumulative_variance[results.cumulative_variance.length - 1] 
+                        : results.explained_variance.reduce((a, b) => a + b, 0);
+                    explainedVarianceText = `<p>Explained variance: ${(totalVariance * 100).toFixed(1)}%</p>`;
+                }
+                
+                document.getElementById('dr-results').innerHTML = `
+                    <div class="reduction-results">
+                        <h5>Dimensionality Reduction Results (${method.toUpperCase()})</h5>
+                        <p>Reduced ${results.original_dimensions} features to ${results.n_components} components</p>
+                        ${explainedVarianceText}
+                        <p><strong>Components:</strong> ${results.component_names.join(', ')}</p>
+                        <p><strong>Method:</strong> ${results.method}</p>
+                    </div>
+                `;
+                
+                updateFeaturesList();
+                showSuccess(`Dimensionality reduction completed using ${method}`);
+            } else {
+                throw new Error(result.error || 'Dimensionality reduction failed');
+            }
+            
+        } catch (error) {
+            console.error('Error in dimensionality reduction:', error);
+            showError('Failed to perform dimensionality reduction: ' + error.message);
+        } finally {
+            hideLoading();
         }
-        
-        document.getElementById('dr-results').innerHTML = `
-            <div class="reduction-results">
-                <h5>Dimensionality Reduction Results (${method})</h5>
-                <p>Reduced ${selectedFeatures.length} features to ${components} components</p>
-                <p>Explained variance: ${(Math.random() * 50 + 70).toFixed(1)}%</p>
-            </div>
-        `;
-        
-        updateFeaturesList();
-        showSuccess(`Dimensionality reduction completed using ${method}`);
     }
     
-    function applyTimeFeatures() {
+    async function applyTimeFeatures() {
         const selectedFeature = document.getElementById('time-features-select').value;
         const timeFeatures = getSelectedCheckboxes('time-feature-types');
         
@@ -391,47 +466,55 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create time-based features
-        timeFeatures.forEach(featureType => {
-            const newFeatureName = `${selectedFeature}_${featureType}`;
-            let newValues;
+        showLoading();
+        
+        try {
+            const response = await fetch(`/api/advance-feature/time-features/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    column: selectedFeature,
+                    features: timeFeatures
+                })
+            });
             
-            switch (featureType) {
-                case 'hour':
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 24));
-                    break;
-                case 'day':
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 31) + 1);
-                    break;
-                case 'month':
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 12) + 1);
-                    break;
-                case 'year':
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 5) + 2020);
-                    break;
-                case 'weekday':
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 7));
-                    break;
-                default:
-                    newValues = Array.from({length: 100}, () => Math.random() * 100);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const newFeature = {
-                name: newFeatureName,
-                type: 'numeric',
-                values: newValues,
-                engineered: true,
-                source: `${featureType} extracted from ${selectedFeature}`
-            };
+            const result = await response.json();
             
-            engineeredFeatures.push(newFeature);
-        });
-        
-        updateFeaturesList();
-        showSuccess(`Time features extracted from ${selectedFeature}`);
+            if (result.success) {
+                const results = result.results;
+                
+                // Add new features to the list
+                results.feature_names.forEach(featureName => {
+                    const newFeature = {
+                        name: featureName,
+                        type: 'numeric',
+                        engineered: true,
+                        source: `Time feature extracted from ${selectedFeature}`
+                    };
+                    engineeredFeatures.push(newFeature);
+                });
+                
+                updateFeaturesList();
+                showSuccess(`Extracted ${results.features_extracted} time features from ${selectedFeature}`);
+            } else {
+                throw new Error(result.error || 'Time feature extraction failed');
+            }
+            
+        } catch (error) {
+            console.error('Error in time feature extraction:', error);
+            showError('Failed to extract time features: ' + error.message);
+        } finally {
+            hideLoading();
+        }
     }
     
-    function applyTextFeatures() {
+    async function applyTextFeatures() {
         const selectedFeature = document.getElementById('text-features-select').value;
         const textFeatures = getSelectedCheckboxes('text-feature-types');
         
@@ -445,50 +528,57 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create text-based features
-        textFeatures.forEach(featureType => {
-            let newFeatureName;
-            let newValues;
+        showLoading();
+        
+        try {
+            const response = await fetch(`/api/advance-feature/text-features/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    column: selectedFeature,
+                    features: textFeatures
+                })
+            });
             
-            switch (featureType) {
-                case 'length':
-                    newFeatureName = `${selectedFeature}_length`;
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 500) + 10);
-                    break;
-                case 'word_count':
-                    newFeatureName = `${selectedFeature}_word_count`;
-                    newValues = Array.from({length: 100}, () => Math.floor(Math.random() * 100) + 5);
-                    break;
-                case 'sentiment':
-                    newFeatureName = `${selectedFeature}_sentiment`;
-                    newValues = Array.from({length: 100}, () => Math.random() * 2 - 1);
-                    break;
-                case 'readability':
-                    newFeatureName = `${selectedFeature}_readability`;
-                    newValues = Array.from({length: 100}, () => Math.random() * 100);
-                    break;
-                default:
-                    newFeatureName = `${selectedFeature}_${featureType}`;
-                    newValues = Array.from({length: 100}, () => Math.random() * 100);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const newFeature = {
-                name: newFeatureName,
-                type: 'numeric',
-                values: newValues,
-                engineered: true,
-                source: `${featureType} extracted from ${selectedFeature}`
-            };
+            const result = await response.json();
             
-            engineeredFeatures.push(newFeature);
-        });
-        
-        updateFeaturesList();
-        showSuccess(`Text features extracted from ${selectedFeature}`);
+            if (result.success) {
+                const results = result.results;
+                
+                // Add new features to the list
+                results.feature_names.forEach(featureName => {
+                    const newFeature = {
+                        name: featureName,
+                        type: 'numeric',
+                        engineered: true,
+                        source: `Text feature extracted from ${selectedFeature}`
+                    };
+                    engineeredFeatures.push(newFeature);
+                });
+                
+                updateFeaturesList();
+                showSuccess(`Extracted ${results.features_extracted} text features from ${selectedFeature}`);
+            } else {
+                throw new Error(result.error || 'Text feature extraction failed');
+            }
+            
+        } catch (error) {
+            console.error('Error in text feature extraction:', error);
+            showError('Failed to extract text features: ' + error.message);
+        } finally {
+            hideLoading();
+        }
     }
     
-    function applyClusteringFeatures() {
+    async function applyClusteringFeatures() {
         const selectedFeatures = getSelectedCheckboxes('cluster-features-list');
+        const algorithm = document.getElementById('cluster-algorithm')?.value || 'kmeans';
         const kClusters = document.getElementById('cluster-k').value || 3;
         
         if (selectedFeatures.length === 0) {
@@ -496,38 +586,54 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create cluster assignment feature
-        const clusterFeatureName = 'cluster_assignment';
-        const clusterValues = Array.from({length: 100}, () => Math.floor(Math.random() * kClusters));
+        showLoading();
         
-        const clusterFeature = {
-            name: clusterFeatureName,
-            type: 'categorical',
-            values: clusterValues,
-            engineered: true,
-            source: `K-means clustering (k=${kClusters}) on ${selectedFeatures.join(', ')}`
-        };
-        
-        engineeredFeatures.push(clusterFeature);
-        
-        // Create distance to cluster centers
-        for (let i = 0; i < kClusters; i++) {
-            const distanceFeatureName = `distance_to_cluster_${i}`;
-            const distanceValues = Array.from({length: 100}, () => Math.random() * 10);
+        try {
+            const response = await fetch(`/api/advance-feature/clustering/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    algorithm: algorithm,
+                    n_clusters: parseInt(kClusters),
+                    columns: selectedFeatures
+                })
+            });
             
-            const distanceFeature = {
-                name: distanceFeatureName,
-                type: 'numeric',
-                values: distanceValues,
-                engineered: true,
-                source: `Distance to cluster ${i} center`
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
-            engineeredFeatures.push(distanceFeature);
+            const result = await response.json();
+            
+            if (result.success) {
+                const results = result.results;
+                
+                // Create cluster assignment feature
+                const clusterFeatureName = `cluster_${algorithm}_${kClusters}`;
+                
+                const clusterFeature = {
+                    name: clusterFeatureName,
+                    type: 'categorical',
+                    engineered: true,
+                    source: `${algorithm} clustering (k=${kClusters}) on ${selectedFeatures.join(', ')}`
+                };
+                
+                engineeredFeatures.push(clusterFeature);
+                
+                updateFeaturesList();
+                showSuccess(`Clustering completed: ${results.n_clusters} clusters found using ${algorithm}`);
+            } else {
+                throw new Error(result.error || 'Clustering failed');
+            }
+            
+        } catch (error) {
+            console.error('Error in clustering:', error);
+            showError('Failed to perform clustering: ' + error.message);
+        } finally {
+            hideLoading();
         }
-        
-        updateFeaturesList();
-        showSuccess(`Clustering features created with ${kClusters} clusters`);
     }
     
     async function applyCustomTransformations() {
