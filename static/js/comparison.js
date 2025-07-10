@@ -27,6 +27,11 @@ document.addEventListener('DOMContentLoaded', function() {
             compareColBtn.addEventListener('click', compareColumns);
         }
         
+        const compareSegBtn = document.getElementById('compare-segments');
+        if (compareSegBtn) {
+            compareSegBtn.addEventListener('click', compareSegments);
+        }
+        
         const exportBtn = document.getElementById('export-comparison');
         if (exportBtn) {
             exportBtn.addEventListener('click', exportComparison);
@@ -57,6 +62,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         if (colDatasetSelect) {
             colDatasetSelect.addEventListener('change', updateColumnOptions);
+        }
+        
+        // Segment comparison selectors
+        const segDatasetSelect = document.getElementById('seg-dataset-select');
+        if (segDatasetSelect) {
+            segDatasetSelect.addEventListener('change', updateSegmentOptions);
         }
     }
     
@@ -695,6 +706,271 @@ document.addEventListener('DOMContentLoaded', function() {
     
     function showSuccess(message) {
         alert(message); // In a real app, use a proper notification system
+    }
+    
+    function updateSegmentOptions() {
+        const selectedDatasetId = document.getElementById('seg-dataset-select').value;
+        const segmentColumn = document.getElementById('segment-column');
+        const targetColumn = document.getElementById('target-column');
+        
+        if (segmentColumn) segmentColumn.innerHTML = '<option value="">Choose segmentation column...</option>';
+        if (targetColumn) targetColumn.innerHTML = '<option value="">Choose target column...</option>';
+        
+        if (selectedDatasetId) {
+            // Fetch columns for the selected dataset
+            fetch(`/api/data/columns/${selectedDatasetId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.columns) {
+                        data.columns.forEach(column => {
+                            if (segmentColumn) {
+                                const option1 = document.createElement('option');
+                                option1.value = column.name;
+                                option1.textContent = column.name;
+                                segmentColumn.appendChild(option1);
+                            }
+                            if (targetColumn) {
+                                const option2 = document.createElement('option');
+                                option2.value = column.name;
+                                option2.textContent = column.name;
+                                targetColumn.appendChild(option2);
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading columns for segments:', error);
+                });
+        }
+    }
+    
+    async function compareSegments() {
+        const datasetId = document.getElementById('seg-dataset-select').value;
+        const segmentColumn = document.getElementById('segment-column').value;
+        const targetColumn = document.getElementById('target-column').value;
+        
+        if (!datasetId || !segmentColumn || !targetColumn) {
+            showError('Please select dataset, segmentation column, and target column');
+            return;
+        }
+        
+        showLoading();
+        
+        try {
+            const response = await fetch(`/api/comparison/segments/${datasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    target_column: targetColumn,
+                    segment_column: segmentColumn
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                displaySegmentComparison(data.data || data, segmentColumn, targetColumn);
+            } else {
+                throw new Error(data.error || 'Failed to compare segments');
+            }
+            
+        } catch (error) {
+            console.error('Error comparing segments:', error);
+            showError('Failed to compare segments: ' + error.message);
+        } finally {
+            hideLoading();
+        }
+    }
+    
+    function displaySegmentComparison(result, segmentColumn, targetColumn) {
+        const container = document.getElementById('comparison-results');
+        
+        // Extract group statistics if available
+        const groupStats = result.group_statistics || {};
+        const anovaTest = result.anova_test || {};
+        const effectSize = result.effect_size || {};
+        
+        const html = `
+            <div class="segment-comparison-results">
+                <h3>Segment Comparison Results</h3>
+                <p>Comparing <strong>${targetColumn}</strong> across segments of <strong>${segmentColumn}</strong></p>
+                
+                <div class="comparison-summary">
+                    <div class="summary-cards">
+                        <div class="summary-card">
+                            <h4>Groups Found</h4>
+                            <span>${result.group_count || Object.keys(groupStats).length || 'Unknown'}</span>
+                        </div>
+                        <div class="summary-card">
+                            <h4>ANOVA F-statistic</h4>
+                            <span>${anovaTest.f_statistic ? anovaTest.f_statistic.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="summary-card">
+                            <h4>P-value</h4>
+                            <span>${anovaTest.p_value ? anovaTest.p_value.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="summary-card">
+                            <h4>Effect Size (η²)</h4>
+                            <span>${effectSize.eta_squared ? effectSize.eta_squared.toFixed(4) : 'N/A'}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="detailed-comparison">
+                    <div class="comparison-tabs">
+                        <button class="comp-tab-button active" data-tab="group-stats">Group Statistics</button>
+                        <button class="comp-tab-button" data-tab="tests">Statistical Tests</button>
+                        <button class="comp-tab-button" data-tab="interpretation">Interpretation</button>
+                    </div>
+
+                    <div id="group-stats" class="comp-tab-content active">
+                        <h4>Group Statistics by ${segmentColumn}</h4>
+                        ${generateGroupStatsHTML(groupStats)}
+                    </div>
+
+                    <div id="tests" class="comp-tab-content">
+                        <h4>Statistical Test Results</h4>
+                        ${generateTestResultsHTML(result)}
+                    </div>
+
+                    <div id="interpretation" class="comp-tab-content">
+                        <h4>Interpretation & Recommendations</h4>
+                        ${generateInterpretationHTML(result)}
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        container.innerHTML = html;
+        container.style.display = 'block';
+        
+        // Reattach tab event listeners for segment comparison
+        const tabButtons = container.querySelectorAll('.comp-tab-button');
+        tabButtons.forEach(button => {
+            button.addEventListener('click', (e) => {
+                switchTab(e.target.getAttribute('data-tab'));
+            });
+        });
+    }
+    
+    function generateGroupStatsHTML(groupStats) {
+        if (!groupStats || Object.keys(groupStats).length === 0) {
+            return '<p>No group statistics available.</p>';
+        }
+        
+        let html = `
+            <table class="group-stats-table">
+                <thead>
+                    <tr>
+                        <th>Group</th>
+                        <th>Count</th>
+                        <th>Mean</th>
+                        <th>Std Dev</th>
+                        <th>Min</th>
+                        <th>Max</th>
+                        <th>Median</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        Object.entries(groupStats).forEach(([group, stats]) => {
+            html += `
+                <tr>
+                    <td><strong>${group}</strong></td>
+                    <td>${stats.count || 'N/A'}</td>
+                    <td>${typeof stats.mean === 'number' ? stats.mean.toFixed(3) : 'N/A'}</td>
+                    <td>${typeof stats.std === 'number' ? stats.std.toFixed(3) : 'N/A'}</td>
+                    <td>${typeof stats.min === 'number' ? stats.min.toFixed(3) : 'N/A'}</td>
+                    <td>${typeof stats.max === 'number' ? stats.max.toFixed(3) : 'N/A'}</td>
+                    <td>${typeof stats.median === 'number' ? stats.median.toFixed(3) : 'N/A'}</td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        return html;
+    }
+    
+    function generateTestResultsHTML(result) {
+        const anovaTest = result.anova_test || {};
+        const kwTest = result.kruskal_wallis_test || {};
+        
+        return `
+            <div class="test-results">
+                <div class="test-section">
+                    <h5>ANOVA Test (Parametric)</h5>
+                    <div class="test-stats">
+                        <div class="stat-item">
+                            <span class="stat-name">F-statistic:</span>
+                            <span class="stat-value">${anovaTest.f_statistic ? anovaTest.f_statistic.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-name">P-value:</span>
+                            <span class="stat-value">${anovaTest.p_value ? anovaTest.p_value.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-name">Interpretation:</span>
+                            <span class="stat-value">${anovaTest.interpretation || 'No interpretation available'}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="test-section">
+                    <h5>Kruskal-Wallis Test (Non-parametric)</h5>
+                    <div class="test-stats">
+                        <div class="stat-item">
+                            <span class="stat-name">H-statistic:</span>
+                            <span class="stat-value">${kwTest.h_statistic ? kwTest.h_statistic.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-name">P-value:</span>
+                            <span class="stat-value">${kwTest.p_value ? kwTest.p_value.toFixed(4) : 'N/A'}</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-name">Interpretation:</span>
+                            <span class="stat-value">${kwTest.interpretation || 'No interpretation available'}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    
+    function generateInterpretationHTML(result) {
+        const recommendations = result.recommendations || [];
+        const effectSize = result.effect_size || {};
+        
+        let html = '<div class="interpretation-section">';
+        
+        if (effectSize.interpretation) {
+            html += `
+                <div class="effect-size-interpretation">
+                    <h5>Effect Size Interpretation</h5>
+                    <p>${effectSize.interpretation}</p>
+                </div>
+            `;
+        }
+        
+        if (recommendations.length > 0) {
+            html += `
+                <div class="recommendations">
+                    <h5>Recommendations</h5>
+                    <ul>
+                        ${recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                    </ul>
+                </div>
+            `;
+        }
+        
+        html += '</div>';
+        return html;
     }
 });
 

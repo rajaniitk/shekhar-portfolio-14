@@ -203,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    function applyPolynomialFeatures() {
+    async function applyPolynomialFeatures() {
         const selectedFeature = document.getElementById('polynomial-features-select').value;
         const degree = document.getElementById('polynomial-degree').value || 2;
         
@@ -212,30 +212,54 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const feature = currentFeatures.find(f => f.name === selectedFeature);
-        if (!feature) return;
+        showLoading();
         
-        // Generate polynomial features
-        for (let d = 2; d <= degree; d++) {
-            const newFeatureName = `${selectedFeature}_poly_${d}`;
-            const newValues = feature.values.map(val => Math.pow(val, d));
+        try {
+            const response = await fetch(`/api/feature/polynomial/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    columns: [selectedFeature],
+                    degree: degree
+                })
+            });
             
-            const newFeature = {
-                name: newFeatureName,
-                type: 'numeric',
-                values: newValues,
-                engineered: true,
-                source: `Polynomial degree ${d} of ${selectedFeature}`
-            };
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
             
-            engineeredFeatures.push(newFeature);
+            const result = await response.json();
+            
+            if (result.success) {
+                // Add new features to the list
+                const newFeatures = result.new_columns || [];
+                newFeatures.forEach(featureName => {
+                    const newFeature = {
+                        name: featureName,
+                        type: 'numeric',
+                        engineered: true,
+                        source: `Polynomial degree ${degree} of ${selectedFeature}`
+                    };
+                    engineeredFeatures.push(newFeature);
+                });
+                
+                updateFeaturesList();
+                showSuccess(`Polynomial features of degree ${degree} created for ${selectedFeature}`);
+            } else {
+                throw new Error(result.error || 'Failed to create polynomial features');
+            }
+            
+        } catch (error) {
+            console.error('Error creating polynomial features:', error);
+            showError('Failed to create polynomial features: ' + error.message);
+        } finally {
+            hideLoading();
         }
-        
-        updateFeaturesList();
-        showSuccess(`Polynomial features of degree ${degree} created for ${selectedFeature}`);
     }
     
-    function applyInteractionFeatures() {
+    async function applyInteractionFeatures() {
         const selectedFeatures = getSelectedCheckboxes('interaction-features-list');
         
         if (selectedFeatures.length < 2) {
@@ -243,31 +267,50 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        // Create interaction features for all pairs
-        for (let i = 0; i < selectedFeatures.length; i++) {
-            for (let j = i + 1; j < selectedFeatures.length; j++) {
-                const feature1 = currentFeatures.find(f => f.name === selectedFeatures[i]);
-                const feature2 = currentFeatures.find(f => f.name === selectedFeatures[j]);
-                
-                if (feature1 && feature2) {
-                    const newFeatureName = `${feature1.name}_x_${feature2.name}`;
-                    const newValues = feature1.values.map((val, idx) => val * feature2.values[idx]);
-                    
-                    const newFeature = {
-                        name: newFeatureName,
-                        type: 'numeric',
-                        values: newValues,
-                        engineered: true,
-                        source: `Interaction between ${feature1.name} and ${feature2.name}`
-                    };
-                    
-                    engineeredFeatures.push(newFeature);
-                }
-            }
-        }
+        showLoading();
         
-        updateFeaturesList();
-        showSuccess(`Interaction features created for ${selectedFeatures.length} features`);
+        try {
+            const response = await fetch(`/api/feature/interactions/${currentDatasetId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    columns: selectedFeatures
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Add new features to the list
+                const newFeatures = result.new_columns || [];
+                newFeatures.forEach(featureName => {
+                    const newFeature = {
+                        name: featureName,
+                        type: 'numeric',
+                        engineered: true,
+                        source: `Interaction feature from ${selectedFeatures.length} features`
+                    };
+                    engineeredFeatures.push(newFeature);
+                });
+                
+                updateFeaturesList();
+                showSuccess(`Interaction features created for ${selectedFeatures.length} features`);
+            } else {
+                throw new Error(result.error || 'Failed to create interaction features');
+            }
+            
+        } catch (error) {
+            console.error('Error creating interaction features:', error);
+            showError('Failed to create interaction features: ' + error.message);
+        } finally {
+            hideLoading();
+        }
     }
     
     function applyFeatureSelection() {
@@ -487,7 +530,7 @@ document.addEventListener('DOMContentLoaded', function() {
         showSuccess(`Clustering features created with ${kClusters} clusters`);
     }
     
-    function applyCustomTransformations() {
+    async function applyCustomTransformations() {
         const transformationType = document.getElementById('custom-transformation').value;
         const targetFeature = document.getElementById('custom-target-feature').value;
         
@@ -496,51 +539,57 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
         
-        const feature = currentFeatures.find(f => f.name === targetFeature);
-        if (!feature) return;
+        showLoading();
         
-        let newFeatureName;
-        let newValues;
-        
-        switch (transformationType) {
-            case 'log':
-                newFeatureName = `log_${targetFeature}`;
-                newValues = feature.values.map(val => Math.log(Math.abs(val) + 1));
-                break;
-            case 'sqrt':
-                newFeatureName = `sqrt_${targetFeature}`;
-                newValues = feature.values.map(val => Math.sqrt(Math.abs(val)));
-                break;
-            case 'square':
-                newFeatureName = `square_${targetFeature}`;
-                newValues = feature.values.map(val => val * val);
-                break;
-            case 'reciprocal':
-                newFeatureName = `reciprocal_${targetFeature}`;
-                newValues = feature.values.map(val => val !== 0 ? 1 / val : 0);
-                break;
-            case 'standardize':
-                newFeatureName = `standardized_${targetFeature}`;
-                const mean = feature.values.reduce((a, b) => a + b, 0) / feature.values.length;
-                const std = Math.sqrt(feature.values.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / feature.values.length);
-                newValues = feature.values.map(val => (val - mean) / std);
-                break;
-            default:
-                showError('Unknown transformation type');
-                return;
+        try {
+            let apiEndpoint;
+            let requestBody;
+            
+            // Map transformation types to appropriate APIs
+            if (transformationType === 'standardize') {
+                apiEndpoint = `/api/feature/scale/${currentDatasetId}`;
+                requestBody = { columns: [targetFeature], method: 'standard' };
+            } else {
+                apiEndpoint = `/api/feature/transform/${currentDatasetId}`;
+                requestBody = { columns: [targetFeature], method: transformationType };
+            }
+            
+            const response = await fetch(apiEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody)
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                const newFeatureName = `${transformationType}_${targetFeature}`;
+                const newFeature = {
+                    name: newFeatureName,
+                    type: 'numeric',
+                    engineered: true,
+                    source: `${transformationType} transformation of ${targetFeature}`
+                };
+                
+                engineeredFeatures.push(newFeature);
+                updateFeaturesList();
+                showSuccess(`${transformationType} transformation applied to ${targetFeature}`);
+            } else {
+                throw new Error(result.error || 'Failed to apply transformation');
+            }
+            
+        } catch (error) {
+            console.error('Error applying transformation:', error);
+            showError('Failed to apply transformation: ' + error.message);
+        } finally {
+            hideLoading();
         }
-        
-        const newFeature = {
-            name: newFeatureName,
-            type: 'numeric',
-            values: newValues,
-            engineered: true,
-            source: `${transformationType} transformation of ${targetFeature}`
-        };
-        
-        engineeredFeatures.push(newFeature);
-        updateFeaturesList();
-        showSuccess(`${transformationType} transformation applied to ${targetFeature}`);
     }
     
     function getSelectedCheckboxes(containerId) {

@@ -584,6 +584,149 @@ class FeatureEngineer:
             current_app.logger.error(f"Text features error: {str(e)}")
             return {'success': False, 'error': str(e)}
     
+    def handle_missing_values(self, dataset_id, columns, strategy='mean'):
+        """Handle missing values in specified columns"""
+        try:
+            dataset = Dataset.query.get_or_404(dataset_id)
+            df = self.data_processor.load_dataset(dataset)
+            
+            if not columns:
+                # Find columns with missing values
+                columns = df.columns[df.isnull().any()].tolist()
+            
+            # Validate columns
+            invalid_cols = [col for col in columns if col not in df.columns]
+            if invalid_cols:
+                return {'success': False, 'error': f'Invalid columns: {invalid_cols}'}
+            
+            # Get before stats
+            before_stats = self.get_column_stats(df, columns)
+            
+            df_imputed = df.copy()
+            
+            for col in columns:
+                if df[col].isnull().any():
+                    if strategy == 'mean' and pd.api.types.is_numeric_dtype(df[col]):
+                        df_imputed[col] = df_imputed[col].fillna(df[col].mean())
+                    elif strategy == 'median' and pd.api.types.is_numeric_dtype(df[col]):
+                        df_imputed[col] = df_imputed[col].fillna(df[col].median())
+                    elif strategy == 'mode':
+                        mode_value = df[col].mode().iloc[0] if not df[col].mode().empty else 'Unknown'
+                        df_imputed[col] = df_imputed[col].fillna(mode_value)
+                    elif strategy == 'forward_fill':
+                        df_imputed[col] = df_imputed[col].fillna(method='ffill')
+                    elif strategy == 'backward_fill':
+                        df_imputed[col] = df_imputed[col].fillna(method='bfill')
+                    elif strategy == 'drop':
+                        df_imputed = df_imputed.dropna(subset=[col])
+                    else:
+                        # Default to most frequent value
+                        most_frequent = df[col].value_counts().index[0] if not df[col].value_counts().empty else 'Unknown'
+                        df_imputed[col] = df_imputed[col].fillna(most_frequent)
+            
+            # Get after stats
+            after_stats = self.get_column_stats(df_imputed, columns)
+            
+            # Save transformation
+            transformation = FeatureEngineering(
+                dataset_id=dataset_id,
+                column_name=','.join(columns),
+                transformation_type='imputation',
+                parameters={'strategy': strategy, 'columns': columns},
+                before_stats=before_stats,
+                after_stats=after_stats,
+                transformation_info={'imputation_strategy': strategy}
+            )
+            
+            db.session.add(transformation)
+            db.session.commit()
+            
+            # Update dataset file
+            self.save_transformed_data(df_imputed, dataset)
+            
+            return {
+                'success': True,
+                'message': f'Successfully handled missing values in {len(columns)} columns using {strategy} strategy',
+                'before_stats': before_stats,
+                'after_stats': after_stats,
+                'transformation_id': transformation.id
+            }
+            
+        except Exception as e:
+            current_app.logger.error(f"Missing value handling error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
+    def create_arithmetic_features(self, dataset_id, feature1, feature2, operation):
+        """Create new features from arithmetic operations between two features"""
+        try:
+            dataset = Dataset.query.get_or_404(dataset_id)
+            df = self.data_processor.load_dataset(dataset)
+            
+            # Validate features
+            if feature1 not in df.columns or feature2 not in df.columns:
+                return {'success': False, 'error': f'Features {feature1} or {feature2} not found'}
+            
+            # Check if features are numeric for most operations
+            if operation in ['add', 'subtract', 'multiply', 'divide']:
+                if not (pd.api.types.is_numeric_dtype(df[feature1]) and pd.api.types.is_numeric_dtype(df[feature2])):
+                    return {'success': False, 'error': 'Both features must be numeric for arithmetic operations'}
+            
+            # Get before stats
+            before_stats = self.get_column_stats(df, [feature1, feature2])
+            
+            df_new = df.copy()
+            new_feature_name = f'{feature1}_{operation}_{feature2}'
+            
+            # Perform operation
+            if operation == 'add':
+                df_new[new_feature_name] = df[feature1] + df[feature2]
+            elif operation == 'subtract':
+                df_new[new_feature_name] = df[feature1] - df[feature2]
+            elif operation == 'multiply':
+                df_new[new_feature_name] = df[feature1] * df[feature2]
+            elif operation == 'divide':
+                # Handle division by zero
+                df_new[new_feature_name] = df[feature1] / (df[feature2] + 1e-8)
+            elif operation == 'ratio':
+                df_new[new_feature_name] = df[feature1] / (df[feature1] + df[feature2] + 1e-8)
+            elif operation == 'difference_ratio':
+                df_new[new_feature_name] = (df[feature1] - df[feature2]) / (df[feature1] + df[feature2] + 1e-8)
+            else:
+                return {'success': False, 'error': f'Unknown operation: {operation}'}
+            
+            # Get after stats
+            after_stats = self.get_column_stats(df_new, [new_feature_name])
+            
+            # Save transformation
+            transformation = FeatureEngineering(
+                dataset_id=dataset_id,
+                column_name=new_feature_name,
+                transformation_type='arithmetic',
+                parameters={'feature1': feature1, 'feature2': feature2, 'operation': operation},
+                before_stats=before_stats,
+                after_stats=after_stats,
+                transformation_info={'operation_type': operation, 'source_features': [feature1, feature2]}
+            )
+            
+            db.session.add(transformation)
+            db.session.commit()
+            
+            # Update dataset file
+            self.save_transformed_data(df_new, dataset)
+            
+            return {
+                'success': True,
+                'message': f'Successfully created feature {new_feature_name} from {feature1} {operation} {feature2}',
+                'before_stats': before_stats,
+                'after_stats': after_stats,
+                'new_feature': new_feature_name,
+                'transformation_id': transformation.id
+            }
+            
+        except Exception as e:
+            current_app.logger.error(f"Arithmetic feature creation error: {str(e)}")
+            return {'success': False, 'error': str(e)}
+    
     def get_column_stats(self, df, columns):
         stats = {}
         for col in columns:

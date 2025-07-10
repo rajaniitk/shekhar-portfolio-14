@@ -144,6 +144,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update feature summary
         updateFeatureSummary(features);
+        
+        // Update initial features count
+        const featuresCountEl = document.getElementById('features-count');
+        if (featuresCountEl) {
+            featuresCountEl.textContent = `${features.length} features`;
+        }
     }
     
     function populateSelect(selectId, features) {
@@ -582,8 +588,11 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = html;
         
         // Update count
-        document.getElementById('features-count').textContent = 
-            `${engineeredFeatures.length} engineered features`;
+        const featuresCountEl = document.getElementById('features-count');
+        if (featuresCountEl) {
+            featuresCountEl.textContent = 
+                `${currentFeatures.length + engineeredFeatures.length} features (${engineeredFeatures.length} engineered)`;
+        }
     }
     
     window.removeEngineeredFeature = function(index) {
